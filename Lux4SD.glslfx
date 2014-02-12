@@ -1,0 +1,66 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<glslfx version="1.0.0" author="Lux">
+
+    <!-- TECHNIQUES -->
+    <technique name="Lux">
+        <!-- PROPERTIES -->
+        <property name="blend_enabled"      value="true"/>
+        <property name="blend_func"         value="src_alpha,one_minus_src_alpha"/>
+        <property name="cull_face_enabled"  value="true"/>
+        <property name="cull_face_mode"     value="back"/>
+
+        <!-- SHADERS -->
+        <shader type="vertex"               filename="Lux/vs.glsl"/>
+        <shader type="fragment"             filename="Lux/fs.glsl"/>
+
+    </technique>    
+
+    <!-- INPUT VERTEX FORMAT -->
+    <vertexformat name="iVS_Position"   semantic="position"/>
+    <vertexformat name="iVS_Normal"     semantic="normal"/>
+    <vertexformat name="iVS_UV"         semantic="texcoord0"/>
+    <vertexformat name="iVS_Tangent"    semantic="tangent0"/>
+    <vertexformat name="iVS_Binormal"   semantic="binormal0"/>
+	
+    <!-- SAMPLERS -->
+    <sampler name="diffuseMap"          usage="diffuse"/>
+    <sampler name="normalMap"           usage="normal"/>
+    <sampler name="specularMap"         usage="specular"/>
+    <sampler name="emissiveMap"         usage="emissive"/>
+    <sampler name="ambientOcclusionMap"         usage="ambientocclusion"/>
+    <sampler name="environmentMap"      usage="environment"/>
+    
+
+
+    <!-- MATRICES -->
+    <uniform name="worldMatrix"                 semantic="world"/>
+    <uniform name="worldViewProjMatrix"         semantic="worldviewprojection"/>
+    <uniform name="worldInverseTransposeMatrix" semantic="worldinversetranspose"/>
+    <uniform name="viewInverseMatrix"           semantic="viewinverse"/>
+
+    <!-- SCENE PARAMETERS -->
+    <uniform name="ambientColor"                semantic="ambient"/>
+    <uniform name="Lamp0Pos"                    semantic="lightposition0"/>
+    <uniform name="Lamp0Color"                  semantic="lightcolor0"/>
+    <uniform name="Lamp0Intensity"              semantic="lightintensity0"/>
+    <uniform name="Lamp1Pos"                    semantic="lightposition1"/>
+    <uniform name="Lamp1Color"                  semantic="lightcolor1"/>
+    <uniform name="Lamp1Intensity"              semantic="lightintensity1"/>
+
+    <!-- UNIFORMS -->
+    
+    <uniform name="tiling"                                          guiName="Tiling"        default="1" min="1" guiWidget="slider" guiMax="10"/>
+    <uniform name="LUX_LINEAR"      guiGroup="Lux Setup"           guiName="Linear Lighting?"     default="false" guiWidget="checkbox" />
+    <uniform name="LUX_AO"      guiGroup="Lux Setup"           guiName="Ambient Occlusion?"     default="true" guiWidget="checkbox" />
+    <uniform name="LUX_AO_TILE"      guiGroup="Lux Setup"           guiName="Tile Ambient Occlusion?"     default="false" guiWidget="checkbox" />
+    <uniform name="HDR_Scale"      guiGroup="Lux Setup"           guiName="HDR Scale"     default="6" guiWidget="slider" guiMin="0" guiMax="10" />
+    <uniform name="DiffuseExposure"      guiGroup="Lux"           guiName="Diffuse Exposure"     default="1" guiWidget="slider" guiMin="0" guiMax="10" />
+    <uniform name="SpecularExposure"      guiGroup="Lux"           guiName="Specular Exposure"     default="2" guiWidget="slider" guiMin="0" guiMax="10" />
+    <uniform name="DiffHDR"               guiGroup="Lux"           guiName="Diffuse is HDR?"     default="false" guiWidget="checkbox" />
+    <uniform name="SpecHDR"               guiGroup="Lux"           guiName="Specular is HDR?"     default="false" guiWidget="checkbox" />
+    <uniform name="DiffuseLOD"      guiGroup="Lux"           guiName="Diffuse LOD"     default="5" guiWidget="slider" guiMin="0" guiMax="10" />
+    <uniform name="Lamp0Power"      guiGroup="Lights"           guiName="Lamp 0 Intensity"     default="2" guiWidget="slider" guiMin="0" guiMax="10" />
+    <uniform name="Lamp1Power"      guiGroup="Lights"           guiName="Lamp 1 Intensity"     default="1" guiWidget="slider" guiMin="0" guiMax="10" />
+    <uniform name="flipY"               guiGroup="Normal"           guiName="DirectX Normal"     default="false" guiWidget="checkbox" />
+ 	<uniform name="heightMapScale"      guiGroup="Normal"           guiName="Normal Intensity"     default="3" guiWidget="slider" guiMin="0" guiMax="5" />
+</glslfx>
