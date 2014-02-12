@@ -143,7 +143,7 @@ vec4 LightingLuxPhongNDF (SurfaceOutputLux s, vec4 _LightColor0, vec3 lightDir, 
 	// we only use fresnel here / and apply late dotNL
 	c.rgb = (s.Albedo.rgb * _LightColor0.rgb + _LightColor0.rgb * fresnel) * dotNL * (atten * 2.0f);
 		
-	c.a = s.Alpha + _LightColor0.a * fresnel * atten;
+	c.a = s.Alpha + _LightColor0.a * atten * (fresnel.r + fresnel.g + fresnel.b);
 	return c;
 }
 
