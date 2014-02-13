@@ -28,8 +28,13 @@ uniform float HDR_Scale = 6.0f;
 uniform bool DiffHDR = false;
 uniform bool SpecHDR = false;
 uniform float DiffuseExposure=1.0f;
-uniform float SpecularExposure=2.0f;
+uniform float SpecularExposure=1.0f;
 uniform float DiffuseLOD = 5.0f;
+uniform float Gamma = 2.22f;
+
+uniform bool Gamma_Pow = true;
+uniform bool Gamma_True = false;
+uniform bool Gamma_Fast = false;
 
 uniform float Lamp0Power=2.0f;
 uniform float Lamp1Power=1.0f;
@@ -152,6 +157,156 @@ float saturate(float a)
 	return max(0.0f,min(a,1.0f));
 }
 
+vec4 toLinearPow(vec4 col)
+{
+	vec4 ncol;
+	
+	ncol.r = pow(col.r,Gamma);
+	ncol.g = pow(col.g,Gamma);
+	ncol.b = pow(col.b,Gamma);
+	ncol.a = pow(col.a,Gamma);
+	
+	return ncol;
+}
+
+vec4 toLinearTrue(vec4 col)
+{
+	vec4 ncol;
+
+	if (col.r <= 0.04045)
+	{ncol.r = col.r / 12.92;}
+	else
+	{ncol.r = pow((col.r + 0.055) / 1.055, 2.4);}
+	
+	if (col.g <= 0.04045)
+	{ncol.g = col.g / 12.92;}
+	else
+	{ncol.g = pow((col.g + 0.055) / 1.055, 2.4);}
+	
+	if (col.b <= 0.04045)
+	{ncol.b = col.b / 12.92;}
+	else
+	{ncol.b = pow((col.b + 0.055) / 1.055, 2.4);}
+	
+	if (col.a <= 0.04045)
+	{ncol.a = col.a / 12.92;}
+	else
+	{ncol.a = pow((col.a + 0.055) / 1.055, 2.4);}
+	
+	return ncol;
+}
+
+vec4 toLinearFast(vec4 col)
+{
+	//http://chilliant.blogspot.de/2012/08/srgb-approximations-for-hlsl.html
+	vec4 ncol;
+	
+	ncol.r = col.r * (col.r * (col.r * 0.305306011 + 0.682171111) + 0.012522878);
+	ncol.g = col.g * (col.g * (col.g * 0.305306011 + 0.682171111) + 0.012522878);
+	ncol.b = col.b * (col.b * (col.b * 0.305306011 + 0.682171111) + 0.012522878);
+	ncol.a = col.a * (col.a * (col.a * 0.305306011 + 0.682171111) + 0.012522878);
+	
+	return ncol;
+}
+
+vec4 toLinear(vec4 col)
+{
+	
+	if (Gamma_Pow)
+	{
+		return toLinearPow(col);
+	}
+	else if (Gamma_True)
+	{
+		return toLinearTrue(col);
+	}
+	else if (Gamma_Fast)
+	{
+		return toLinearFast(col);
+	}
+	else
+	{
+		return toLinearPow(col);
+	}
+}
+
+vec4 toGammaPow(vec4 col)
+{
+	vec4 ncol;
+	
+	ncol.r = pow(col.r,1/Gamma);
+	ncol.g = pow(col.g,1/Gamma);
+	ncol.b = pow(col.b,1/Gamma);
+	ncol.a = pow(col.a,1/Gamma);
+	
+	return ncol;
+}
+
+vec4 toGammaTrue(vec4 col)
+{
+	vec4 ncol;
+	
+	if (col.r <= 0.0031308)
+	{ncol.r = col.r * 12.92;}
+	else
+	{ncol.r = 1.055 * pow(col.r, 1.0 / 2.4) - 0.055;}
+	
+	if (col.g <= 0.0031308)
+	{ncol.g = col.g * 12.92;}
+	else
+	{ncol.g = 1.055 * pow(col.g, 1.0 / 2.4) - 0.055;}
+	
+	if (col.b <= 0.0031308)
+	{ncol.b = col.b * 12.92;}
+	else
+	{ncol.b = 1.055 * pow(col.b, 1.0 / 2.4) - 0.055;}
+	
+	if (col.a <= 0.0031308)
+	{ncol.a = col.a * 12.92;}
+	else
+	{ncol.a = 1.055 * pow(col.a, 1.0 / 2.4) - 0.055;}
+	
+	return ncol;
+}
+
+vec4 toGammaFast(vec4 col)
+{
+	//http://chilliant.blogspot.de/2012/08/srgb-approximations-for-hlsl.html
+	
+	vec4 ncol;
+	
+	vec3 S1 = sqrt(col.rgb);
+ 	vec3 S2 = sqrt(S1);
+	vec3 S3 = sqrt(S2);
+	ncol.rgb = 0.662002687 * S1 + 0.684122060 * S2 - 0.323583601 * S3 - 0.225411470 * col.rgb;
+	
+	ncol.a=1.0f; // nasty hack: calc brings in false alpha.
+	
+	return ncol;
+}
+
+
+
+vec4 toGamma(vec4 col)
+{
+	if (Gamma_Pow)
+	{
+		return toGammaPow(col);
+	}
+	else if (Gamma_True)
+	{
+		return toGammaTrue(col);
+	}
+	else if (Gamma_Fast)
+	{
+		return toGammaFast(col);
+	}
+	else
+	{
+		return toGammaPow(col);
+	}
+}
+
 void main()
 {
 	vec3 cameraPosWS = viewInverseMatrix[3].xyz;
@@ -197,6 +352,15 @@ void main()
   
 	vec4 diff_albedo = texture2D(diffuseMap, uv);
 	vec4 spec_albedo = texture2D(specularMap, uv);
+	
+	if (LUX_LINEAR)
+	{
+		vec4 ldiff = toLinear(diff_albedo);
+		vec4 lspec = toLinear(spec_albedo);
+		spec_albedo.rgb = lspec.rgb;
+		diff_albedo.rgb = ldiff.rgb;
+	}
+	
 	// Diffuse Albedo
 	o.Albedo = diff_albedo.rgb;// * _Color.rgb;
 	o.Alpha = diff_albedo.a;// * _Color.a;
@@ -205,7 +369,6 @@ void main()
 	o.SpecularColor = spec_albedo.rgb;
 	// Roughness – we just take it as it is and do not bring it into linear space (alpha!) so roughness textures must be authored using gamma values
 	o.Specular = spec_albedo.a;
-	
 	
 
 	// Light 0 contribution
@@ -271,6 +434,7 @@ void main()
 	// add diffuse and specular and conserve energy
 	o.Emission = (1.0f - spec_ibl.rgb) * o.Emission + spec_ibl.rgb;
 	
+	vec4 Ambient_final = vec4(o.Albedo.rgb * ambientColor.rgb,1.0f);
 	if (LUX_AO){
 		vec2 AO_uv = uv;
 		if (!LUX_AO_TILE)
@@ -279,16 +443,24 @@ void main()
 		}
 		vec4 ambientOcclusion = texture2D(ambientOcclusionMap, AO_uv);
 		o.Emission *= ambientOcclusion.a;
+		Ambient_final.a = ambientOcclusion.a;
 	}
-   	vec4 Ambient_final = vec4(o.Albedo.rgb * ambientColor.rgb,1.0f);
+   
    
    	vec4 emis_albedo = texture2D(emissiveMap, uv);
 	o.Emission += emis_albedo.rgb * emis_albedo.a;
    
   	// ------------------------------------------
-  	vec3 finalcolor = contrib1.rgb * contrib1.a  + contrib2.rgb * contrib2.a + (o.Emission + Ambient_final.rgb * Ambient_final.a);
+  	vec3 finalcolor = contrib1.rgb * contrib1.a + contrib2.rgb * contrib2.a + (o.Emission + Ambient_final.rgb * Ambient_final.a);
 
  	// Final Color
-  	gl_FragColor =  vec4(finalcolor,1.0f);
+ 	if (LUX_LINEAR)
+ 	{
+  		gl_FragColor = toGamma(vec4(finalcolor,1.0f));
+  	}
+  	else
+  	{
+  		gl_FragColor = vec4(finalcolor,1.0f);
+  	}
 }
 
