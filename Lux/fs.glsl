@@ -24,6 +24,8 @@ uniform float heightMapScale = 3.0f;
 uniform bool LUX_AO = true;
 uniform bool LUX_AO_TILE = false;
 uniform bool LUX_LINEAR = false;
+uniform bool LUX_DIFFMAP = false;
+uniform bool LUX_SPECMAP = false;
 uniform float HDR_Scale = 6.0f;
 uniform bool DiffHDR = false;
 uniform bool SpecHDR = false;
@@ -44,6 +46,7 @@ uniform sampler2D diffuseMap;
 uniform sampler2D specularMap;
 uniform sampler2D emissiveMap;
 uniform samplerCube environmentMap;
+uniform samplerCube reflectionMap;
 uniform sampler2D ambientOcclusionMap;
 
 uniform mat4 viewInverseMatrix;
@@ -401,7 +404,15 @@ void main()
 	vec3 worldNormal = vec3(o.Normal.x,-o.Normal.y,o.Normal.z) ;
 	
 	//		add diffuse IBL
-	vec4	diff_ibl = textureCubeLod (environmentMap, worldNormal, DiffuseLOD);
+	vec4 diff_ibl;
+	if (LUX_DIFFMAP)
+	{
+		diff_ibl = textureCube(environmentMap,worldNormal);
+	}
+	else
+	{
+		diff_ibl = textureCubeLod (environmentMap, worldNormal, DiffuseLOD);
+	}
 	diff_ibl = diff_ibl.bgra;
 	
 	if (LUX_LINEAR){
@@ -415,7 +426,15 @@ void main()
 	//		add specular IBL		
 	//vec3 worldRefl = WorldReflectionVector (IN, o.Normal);
 	vec3 worldRefl = reflect(pointToCameraDirWS,cumulatedNormalWS);
-	vec4 spec_ibl = textureCubeLod (environmentMap, worldRefl, 6.0f - 8.0f * spec_albedo.a);
+	vec4 spec_ibl;
+	if (LUX_SPECMAP)
+	{
+		spec_ibl = textureCubeLod (reflectionMap, worldRefl, 6.0f - 8.0f * spec_albedo.a);
+	}
+	else
+	{
+		spec_ibl = textureCubeLod (environmentMap, worldRefl, 6.0f - 8.0f * spec_albedo.a);
+	}
 	spec_ibl = spec_ibl.bgra;
 
 	if (LUX_LINEAR){
