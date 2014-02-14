@@ -15,7 +15,7 @@ uniform vec3 Lamp1Color = vec3(0.198f,0.198f,0.198f);
 uniform float Lamp1Intensity = 1.0f;
 
 uniform float Kr = 0.5f;
-uniform vec3 ambientColor = vec3(0.07f,0.07f,0.07f);
+uniform vec3 ambientColor = vec3(0.0f,0.0f,0.0f);
 uniform float tiling = 1.0f;
 
 uniform bool flipY = true;
@@ -387,16 +387,39 @@ void main()
 	// Lux IBL / ambient lighting
 	float Lux_HDR_Scale = HDR_Scale;
 	vec4 ExposureIBL;
-	ExposureIBL.x=DiffuseExposure;
-	ExposureIBL.y=SpecularExposure;
-
-	if (DiffHDR)
-	{
-		ExposureIBL.x *= pow(Lux_HDR_Scale,2.2333333f);
+	
+	
+	if (LUX_LINEAR)
+	{// LINEAR
+		// exposure is already in linear space
+		// Lux_HDR_Scale is in srgb so we convert it to linear space
+		
+		ExposureIBL.x = DiffuseExposure;
+		if (DiffHDR)
+		{
+			ExposureIBL.x *= pow(Lux_HDR_Scale,2.2333333f);
+		}
+		
+		ExposureIBL.y = SpecularExposure;
+		if (SpecHDR)
+		{
+			ExposureIBL.y *= pow(Lux_HDR_Scale,2.2333333f);
+		}
 	}
-	if (SpecHDR)
-	{
-		ExposureIBL.y *= pow(Lux_HDR_Scale,2.2333333f);
+	else
+	{// GAMMA
+		// exposure is in linear space so we convert it to srgb
+		// Lux_HDR_Scale is already in srgb
+		
+		ExposureIBL.x = pow(DiffuseExposure, 1.0f / 2.2333333f);
+		if (DiffHDR) {
+			ExposureIBL.x *= Lux_HDR_Scale;
+		}
+		
+		ExposureIBL.y = pow(SpecularExposure, 1.0f / 2.2333333f);
+		if (SpecHDR) {
+			ExposureIBL.y *= Lux_HDR_Scale;
+		}
 	}
 
 
