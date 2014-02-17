@@ -50,24 +50,40 @@
 
     <!-- UNIFORMS -->
     
+    <!-- TILING -->
     <uniform name="tiling"                                          guiName="Tiling"        default="1" min="1" guiWidget="slider" guiMax="10"/>
+    
+    
+    <!--GAMMA METHOD -->
     <uniform name="Gamma"      guiGroup="Gamma Method"           guiName="Gamma"     default="2.2333333" guiWidget="slider" guiMin="0" guiMax="10" />
     <!-- <uniform name="Gamma_Pow"      guiGroup="Gamma Method"           guiName="Pow"     default="false" guiWidget="checkbox"  /> -->
     <uniform name="Gamma_True"      guiGroup="Gamma Method"           guiName="Accurate"     default="true" guiWidget="checkbox"  />
     <!-- <uniform name="Gamma_Fast"      guiGroup="Gamma Method"           guiName="Fast"     default="false" guiWidget="checkbox"  /> -->
+
+    <!-- LUX SETUP -->    
     <uniform name="LUX_LINEAR"      guiGroup="Lux Setup"           guiName="Linear Lighting?"     default="true" guiWidget="checkbox" />
     <uniform name="LUX_AO"      guiGroup="Lux Setup"           guiName="Ambient Occlusion?"     default="true" guiWidget="checkbox" />
-    <uniform name="LUX_AO_TILE"      guiGroup="Lux Setup"           guiName="Tile Ambient Occlusion?"     default="false" guiWidget="checkbox" />
-    <!-- <uniform name="LUX_DIFFMAP"               guiGroup="Lux Setup"           guiName="Use Custom Environment/Diffuse Map? (needs graph 'environment' output)"     default="false" guiWidget="checkbox" /> -->
-    <uniform name="LUX_SPECMAP"               guiGroup="Lux Setup"           guiName="Use Specular Reflection Map? (needs graph 'reflection' output)"     default="false" guiWidget="checkbox" />
     <uniform name="HDR_Scale"      guiGroup="Lux Setup"           guiName="HDR Scale"     default="6" guiWidget="slider" guiMin="0" guiMax="10" />
+    <uniform name="LUX_AO_TILE"      guiGroup="Lux Setup"           guiName="Tile Ambient Occlusion?"     default="false" guiWidget="checkbox" />
+    <uniform name="LUX_DIFFMAP"               guiGroup="Lux Setup"           guiName="Use Custom Environment/Diffuse Map? (needs graph 'environment' output)"     default="false" guiWidget="checkbox" />
+    <uniform name="LUX_SPECMAP"               guiGroup="Lux Setup"           guiName="Use Specular Reflection Map? (needs graph 'reflection' output)"     default="false" guiWidget="checkbox" />
+
+    
+    <!-- LUX -->
     <uniform name="DiffuseExposure"      guiGroup="Lux"           guiName="Diffuse Exposure"     default="1" guiWidget="slider" guiMin="0" guiMax="10" />
     <uniform name="SpecularExposure"      guiGroup="Lux"           guiName="Specular Exposure"     default="1" guiWidget="slider" guiMin="0" guiMax="10" />
     <uniform name="DiffHDR"               guiGroup="Lux"           guiName="Diffuse is HDR?"     default="false" guiWidget="checkbox" />
     <uniform name="SpecHDR"               guiGroup="Lux"           guiName="Specular is HDR?"     default="false" guiWidget="checkbox" />
     <uniform name="DiffuseLOD"      guiGroup="Lux"           guiName="Diffuse LOD"     default="5" guiWidget="slider" guiMin="0" guiMax="10" />
+    
+    <!-- LIGHTS -->
     <uniform name="Lamp0Power"      guiGroup="Lights"           guiName="Lamp 0 Intensity"     default="2" guiWidget="slider" guiMin="0" guiMax="10" />
     <uniform name="Lamp1Power"      guiGroup="Lights"           guiName="Lamp 1 Intensity"     default="1" guiWidget="slider" guiMin="0" guiMax="10" />
+    
+    <!-- NORMAL -->
     <uniform name="flipY"               guiGroup="Normal"           guiName="DirectX Normal"     default="false" guiWidget="checkbox" />
  	<uniform name="heightMapScale"      guiGroup="Normal"           guiName="Normal Intensity"     default="3" guiWidget="slider" guiMin="0" guiMax="5" />
+ 	
+ 	<!-- SKYSHOP -->
+    <uniform name="SKY_INVERTROUGH"               guiGroup="Skyshop"           guiName="Invert Roughness?"     default="false" guiWidget="checkbox" />
 </glslfx>

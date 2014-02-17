@@ -26,6 +26,9 @@ uniform bool LUX_AO_TILE = false;
 uniform bool LUX_LINEAR = false;
 uniform bool LUX_DIFFMAP = false;
 uniform bool LUX_SPECMAP = false;
+
+uniform bool SKY_INVERTROUGH = false;
+
 uniform float HDR_Scale = 6.0f;
 uniform bool DiffHDR = false;
 uniform bool SpecHDR = false;
@@ -355,6 +358,11 @@ void main()
   
 	vec4 diff_albedo = texture2D(diffuseMap, uv);
 	vec4 spec_albedo = texture2D(specularMap, uv);
+	
+	if (SKY_INVERTROUGH)
+	{
+		spec_albedo.a = 1 - spec_albedo.a;
+	}
 	
 	if (LUX_LINEAR)
 	{
