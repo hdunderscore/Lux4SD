@@ -1,5 +1,6 @@
 //////////////////////////////// Fragment shader
 #version 120
+#extension GL_ARB_shader_texture_lod : require
 
 varying vec3 iFS_Normal;
 varying vec2 iFS_UV;
