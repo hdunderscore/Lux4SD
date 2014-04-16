@@ -219,13 +219,13 @@ vec4 toLinearFast(vec4 col)
 vec4 toLinear(vec4 col)
 {
 	
-	if (Gamma_Pow)
-	{
-		return toLinearPow(col);
-	}
-	else if (Gamma_True)
+	if (Gamma_True)
 	{
 		return toLinearTrue(col);
+	}
+	else if (Gamma_Pow)
+	{
+		return toLinearPow(col);
 	}
 	else if (Gamma_Fast)
 	{
@@ -296,13 +296,13 @@ vec4 toGammaFast(vec4 col)
 
 vec4 toGamma(vec4 col)
 {
-	if (Gamma_Pow)
-	{
-		return toGammaPow(col);
-	}
-	else if (Gamma_True)
+	if (Gamma_True)
 	{
 		return toGammaTrue(col);
+	}
+	else if (Gamma_Pow)
+	{
+		return toGammaPow(col);
 	}
 	else if (Gamma_Fast)
 	{
