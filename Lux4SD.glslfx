@@ -28,11 +28,16 @@
     <sampler name="specularMap"         usage="specular"/>
     <sampler name="emissiveMap"         usage="emissive"/>
     <sampler name="ambientOcclusionMap"         usage="ambientocclusion"/>
-    <sampler name="environmentMap"      usage="environment"/>
+    <sampler name="environmentMap"      usage="panorama"/>
     <sampler name="reflectionMap"      usage="reflection"/>
     
-
-
+        <!-- MISC PARAMETERS -->
+    <uniform name="nbSamples"                   semantic="samplespostablesize"/>
+    <uniform name="hammersley"                  semantic="samplespostable"/>
+    <uniform name="maxLod"                      semantic="panoramamipmapheight"/>
+    <uniform name="AmbiIntensity"               semantic="panoramaintensity"/>
+    <uniform name="envRotation"                 semantic="panoramarotation"/>
+    
     <!-- MATRICES -->
     <uniform name="worldMatrix"                 semantic="world"/>
     <uniform name="worldViewProjMatrix"         semantic="worldviewprojection"/>
@@ -86,4 +91,8 @@
  	
  	<!-- SKYSHOP -->
     <uniform name="SKY_INVERTROUGH"               guiGroup="Skyshop"           guiName="Invert Roughness?"     default="false" guiWidget="checkbox" />
+    
+    <!-- GUI-EXPOSED PARAMETERS -->
+    <uniform name="sRGBBaseColor"        guiGroup="SD4"             guiName="sRGB Diffuse"              default="true" guiWidget="checkbox" />
+
 </glslfx>

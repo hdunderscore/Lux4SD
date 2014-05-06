@@ -2,6 +2,10 @@
 #version 120
 #extension GL_ARB_shader_texture_lod : require
 
+#define M_PI     3.1415926535897932384626433832795
+#define M_INV_PI 0.31830988618379067153776752674503
+#define M_INV_LOG2 1.4426950408889634073599246810019
+
 varying vec3 iFS_Normal;
 varying vec2 iFS_UV;
 varying vec3 iFS_Tangent;
@@ -49,11 +53,29 @@ uniform sampler2D normalMap;
 uniform sampler2D diffuseMap;
 uniform sampler2D specularMap;
 uniform sampler2D emissiveMap;
-uniform samplerCube environmentMap;
-uniform samplerCube reflectionMap;
+uniform sampler2D environmentMap;
+uniform sampler2D reflectionMap;
 uniform sampler2D ambientOcclusionMap;
 
 uniform mat4 viewInverseMatrix;
+
+uniform float AmbiIntensity = 1.0;
+uniform float envRotation = 0.0;
+uniform bool sRGBBaseColor = true;
+uniform bool sRGBspec = true;
+
+// Number of miplevels in the envmap
+uniform float maxLod = 12.0;
+
+// Maximum number of samples in the table
+const int maxNbSamples = 256;
+// Actual number of samples in the table
+uniform int nbSamples = 16;
+// Sample table
+uniform vec2 hammersley[maxNbSamples];
+
+
+
 
 struct SurfaceOutputLux {
 	vec3 Albedo;
@@ -314,6 +336,80 @@ vec4 toGamma(vec4 col)
 	}
 }
 
+
+// --- From physically_based/fs.glsl shader.
+float probabilityLambert(vec3 Ln, vec3 Nn)
+{
+	return max( 0.0, dot(Nn, Ln) * M_INV_PI );
+}
+
+float distortion(vec3 Wn)
+{
+	// Computes the inverse of the solid angle of the (differential) pixel in
+	// the environment map pointed at by Wn
+	float sinT = max(0.0000001, sqrt(1.0-Wn.y*Wn.y));
+	return 1.0/sinT;
+}
+
+float normal_distrib(
+	float ndh,
+	float Roughness)
+{
+// use GGX / Trowbridge-Reitz, same as Disney and Unreal 4
+// cf http://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf p3
+	float alpha = Roughness * Roughness;
+	float tmp = alpha / (ndh*ndh*(alpha*alpha-1.0)+1.0);
+	return tmp * tmp * M_INV_PI;
+}
+
+float probabilityGGX(float ndh, float vdh, float Roughness)
+{
+	return normal_distrib(ndh, Roughness) * ndh / (4.0*vdh);
+}
+
+vec3 importanceSampleGGX(vec2 Xi, vec3 A, vec3 B, vec3 C, float roughness)
+{
+	float a = roughness*roughness;
+	float cosT = sqrt((1.0-Xi.y)/(1.0+(a*a-1.0)*Xi.y));
+	float sinT = sqrt(1.0-cosT*cosT);
+	float phi = 2.0*M_PI*Xi.x;
+	return (sinT*cos(phi)) * A + (sinT*sin(phi)) * B + cosT * C;
+}
+
+vec3 importanceSampleLambert(vec2 Xi, vec3 A, vec3 B, vec3 C)
+{
+	float cosT = sqrt(Xi.y);
+	float sinT = sqrt(1.0-Xi.y);
+	float phi = 2.0*M_PI*Xi.x;
+	return (sinT*cos(phi)) * A + (sinT*sin(phi)) * B + cosT * C;
+}
+
+vec3 rotate(vec3 v, float a)
+{
+	float angle =a*2.0*M_PI;
+	float ca = cos(angle);
+	float sa = sin(angle);
+	return vec3(v.x*ca+v.z*sa, v.y, v.z*ca-v.x*sa);
+}
+
+float computeLOD(vec3 Ln, float p)
+{
+	return max(0.0, (maxLod-1.5) - 0.5*(log(float(nbSamples)) + log( p * distortion(Ln) ))
+		* M_INV_LOG2);
+}
+
+vec4 samplePanoramicLOD(sampler2D map, vec3 dir, float lod)
+{
+	// Compute environment map contribution
+	float n = length(dir.xz);
+	vec2 pos = vec2( (n>0.0000001) ? dir.x / n : 0.0, dir.y);
+	pos = acos(pos)*M_INV_PI;
+	pos.x = (dir.z > 0.0) ? pos.x*0.5 : 1.0-(pos.x*0.5);
+	pos.y = 1.0-pos.y;
+        return texture2DLod(map, pos, lod).rgba;
+}
+// ---
+
 void main()
 {
 	vec3 cameraPosWS = viewInverseMatrix[3].xyz;
@@ -333,7 +429,10 @@ void main()
 
 	// ------------------------------------------
 	// Add Normal from normalMap
+	vec3 fixedNormalOS = iFS_Normal;  // HACK for empty normal textures
 	vec3 normalTS = texture2D(normalMap,uv).xyz;
+
+	
 	if (length(normalTS)<0.0001f)
 	{
 		cumulatedNormalOS = normalOS;
@@ -345,9 +444,14 @@ void main()
 		vec3 normalMapOS = normalTS.x*tangentOS + normalTS.y*binormalOS;
 		cumulatedNormalOS = cumulatedNormalOS + normalMapOS;
 		cumulatedNormalOS = normalize(cumulatedNormalOS);
+		
+		fixedNormalOS = normalize(
+						normalTS.x*iFS_Tangent +
+						normalTS.y*iFS_Binormal +
+						normalTS.z*iFS_Normal );
 	}
 
-
+	vec3 fixedNormalWS = fixedNormalOS;
   	vec3 cumulatedNormalWS = normalVecOSToWS(cumulatedNormalOS);
 
   	// ------------------------------------------
@@ -431,43 +535,72 @@ void main()
 		}
 	}
 
+	vec4 diff_ibl = vec4(0,0,0,0);
+	vec4 spec_ibl = vec4(0,0,0,0);
+	
+	// --- Using IBL calculations from physically_based/fs.glsl shader.
+	vec3 Tp = normalize(iFS_Tangent
+		- fixedNormalWS*dot(iFS_Tangent, fixedNormalWS)); // local tangent
+	vec3 Bp = normalize(iFS_Binormal
+		- fixedNormalWS*dot(iFS_Binormal,fixedNormalWS)
+		- Tp*dot(iFS_Binormal, Tp)); // local bitangent
+	
+	float ndv = max( 1e-8, abs(dot( pointToCameraDirWS, fixedNormalWS )) );
 
-	//	vec3 worldNormal = WorldNormalVector (IN, o.Normal);	
-	vec3 worldNormal = vec3(o.Normal.x,-o.Normal.y,o.Normal.z) ;
+	vec3 contribE = vec3(0.0,0.0,0.0);
+	float glossiness = 1.0f - spec_albedo.a;
+	
+	for(int i=0; i<nbSamples; ++i)
+	{
+		vec2 Xi = hammersley[i];
+		vec3 Sd = importanceSampleLambert(Xi,Tp,Bp,fixedNormalWS);
+		float pdfD = probabilityLambert(Sd, fixedNormalWS);
+		float lodD = computeLOD(Sd, pdfD);
+		diff_ibl += samplePanoramicLOD(environmentMap,rotate(Sd,envRotation),lodD);
+		
+		vec3 Hn = importanceSampleGGX(Xi,Tp,Bp,fixedNormalWS, glossiness);
+		vec3 Ln = -reflect(pointToCameraDirWS,Hn);
+
+		float ndl = dot(fixedNormalWS, Ln);
+
+		// Horizon fading trick from http://marmosetco.tumblr.com/post/81245981087
+		const float horizonFade = 1.3;
+		float horiz = clamp( 1.0 + horizonFade * ndl, 0.0, 1.0 );
+		horiz *= horiz;
+		ndl = max( 1e-8, abs(ndl) );
+
+		float vdh = max( 1e-8, abs(dot(pointToCameraDirWS, Hn)) );
+		float ndh = max( 1e-8, abs(dot(fixedNormalWS, Hn)) );
+		//float lodS = 6.0f - 8.0f * spec_albedo.a;
+		float lodS = glossiness < 0.01 ? 0.0 : computeLOD(Ln,
+			probabilityGGX(ndh, vdh, glossiness));
+		if (LUX_SPECMAP)
+		{
+			spec_ibl += samplePanoramicLOD(reflectionMap,rotate(Ln,envRotation),lodS) * horiz;
+		}
+		else
+		{
+			spec_ibl += samplePanoramicLOD(environmentMap,rotate(Ln,envRotation),lodS) * horiz;
+		}
+	}
+
+	diff_ibl /= nbSamples;
+	spec_ibl /= nbSamples;
+	// ---
+	
+	//diff_ibl = diff_ibl.bgra;
 	
 	//		add diffuse IBL
-	vec4 diff_ibl;
-	if (LUX_DIFFMAP)
-	{
-		diff_ibl = textureCube(environmentMap,worldNormal);
-	}
-	else
-	{
-		diff_ibl = textureCubeLod (environmentMap, worldNormal, DiffuseLOD);
-	}
-	diff_ibl = diff_ibl.bgra;
-	
 	if (LUX_LINEAR){
 			// if colorspace = linear alpha has to be brought to linear too (rgb already is): alpha = pow(alpha,2.233333333).
 			// approximation taken from http://chilliant.blogspot.de/2012/08/srgb-approximations-for-hlsl.html
 			diff_ibl.a *= diff_ibl.a * (diff_ibl.a * 0.305306011f + 0.682171111f) + 0.012522878f;
 	}
-	diff_ibl.rgb = diff_ibl.rgb * diff_ibl.a;
+	//diff_ibl.rgb = diff_ibl.rgb * diff_ibl.a;
 	o.Emission = diff_ibl.rgb * ExposureIBL.x * o.Albedo;
 
-	//		add specular IBL		
-	//vec3 worldRefl = WorldReflectionVector (IN, o.Normal);
-	vec3 worldRefl = reflect(pointToCameraDirWS,cumulatedNormalWS);
-	vec4 spec_ibl;
-	if (LUX_SPECMAP)
-	{
-		spec_ibl = textureCubeLod (reflectionMap, worldRefl, 6.0f - 8.0f * spec_albedo.a);
-	}
-	else
-	{
-		spec_ibl = textureCubeLod (environmentMap, worldRefl, 6.0f - 8.0f * spec_albedo.a);
-	}
-	spec_ibl = spec_ibl.bgra;
+	//		add specular IBL
+	//spec_ibl = spec_ibl.bgra;
 
 	if (LUX_LINEAR){
 		// if colorspace = linear alpha has to be brought to linear too (rgb already is): alpha = pow(alpha,2.233333333f).
@@ -475,7 +608,8 @@ void main()
 		spec_ibl.a *= spec_ibl.a * (spec_ibl.a * 0.305306011f + 0.682171111f) + 0.012522878f;
 	}
 	
-	spec_ibl.rgb = spec_ibl.rgb * spec_ibl.a;
+	//spec_ibl.rgb = spec_ibl.rgb * spec_ibl.a;
+	
 	// fresnel based on spec_albedo.rgb and roughness (spec_albedo.a)
 	// taken from: http://seblagarde.wordpress.com/2011/08/17/hello-world/
 	// viewDir is in tangent-space (as we sample o.Normal) so we use o.Normal
