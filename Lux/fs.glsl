@@ -41,6 +41,8 @@ uniform float DiffuseExposure=1.0f;
 uniform float SpecularExposure=1.0f;
 uniform float DiffuseLOD = 5.0f;
 uniform float Gamma = 2.22f;
+uniform bool Metalness = true;
+uniform bool CookTorrence = false;
 
 uniform bool Gamma_Pow = true;
 uniform bool Gamma_True = false;
@@ -111,29 +113,48 @@ float CalcAtten(vec3 P, vec3 N, vec3 lightCentre, float lightRadius, float cutof
     float distance = length(L);
     float d = max(distance - r, 0.0f);
     L /= distance;
-     
+
     // calculate basic attenuation
     float denom = d/r + 1.0f;
     float attenuation = 1.0f / (denom*denom);
-     
+
     // scale and bias attenuation such that:
     //   attenuation == 0 at extent of max influence
     //   attenuation == 1 when d == 0
     attenuation = (attenuation - cutoff) / (1.0f - cutoff);
     attenuation = max(attenuation, 0.0f);
-    
+
     return attenuation;
 }
 
+// for Cook Torrence spec or roughness has to be in linear space
+float LuxAdjustSpecular(float spec) {
+    //Lux License
+
+	//Copyright (c) <2014> <larsbertam69@googlemail.com>
+	//Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+	//The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+	//THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+	if (CookTorrence)
+    {
+        return clamp(pow(spec, 1/2.2), 0.0, 0.996);
+    }
+	else
+    {
+        return spec;
+    }
+}
+
 vec4 LightingLuxPhongNDF (SurfaceOutputLux s, vec4 _LightColor0, vec3 lightDir, vec3 viewDir, float atten){
-  
+
 	//Lux License
 
 	//Copyright (c) <2014> <larsbertam69@googlemail.com>
 	//Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 	//The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 	//THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-  	
+
   	// get base variables
 
   	// normalizing lightDir makes fresnel smoother
@@ -143,23 +164,23 @@ vec4 LightingLuxPhongNDF (SurfaceOutputLux s, vec4 _LightColor0, vec3 lightDir, 
 	// dotNL has to have max
 	float dotNL = max (0.0f, dot (s.Normal, lightDir));
 	float dotNH = max (0.0f, dot (s.Normal, h));
-	
+
 	// bring specPower into a range of 0.25 – 2048
-	float specPower = exp2(10.0f * s.Specular + 1) - 1.75f;
+	float specPower = exp2(10.0f * s.Specular + 1.0f) - 1.75f;
 
 	// Normalized Lighting Model:
 	// L = (c_diff * dotNL + F_Schlick(c_spec, l_c, h) * ( (spec + 2.0f)/8.0f) * dotNH˄spec * dotNL) * c_light
-	
+
 	// Specular: Phong lobe normal distribution function
 	//float spec = ((specPower + 2.0) * 0.125 ) * pow(dotNH, specPower) * dotNL; // would be the correct term
 	// we use late * dotNL to get rid of any artifacts on the backsides
 	float spec = specPower * 0.125f * pow(dotNH, specPower);
 
 	// Visibility: Schlick-Smith
-	float alpha = 2.0f / sqrt( 3.14159265f * (specPower + 2.0f) );
-	float visibility = 1.0f / ( (dotNL * (1.0f - alpha) + alpha) * ( dot(s.Normal, viewDir) * (1.0f - alpha) + alpha) ); 
+	float alpha = 2.0f / sqrt( M_PI * (specPower + 2.0f) );
+	float visibility = 1.0f / ( (dotNL * (1.0f - alpha) + alpha) * ( dot(s.Normal, viewDir) * (1.0f - alpha) + alpha) );
 	spec *= visibility;
-	
+
 	// Fresnel: Schlick
 	// fixed3 fresnel = s.SpecularColor.rgb + ( 1.0f - s.SpecularColor.rgb) * pow(1.0f - saturate(dot(h, lightDir)), 5.0f);
 	// fast fresnel approximation:
@@ -169,14 +190,14 @@ vec4 LightingLuxPhongNDF (SurfaceOutputLux s, vec4 _LightColor0, vec3 lightDir, 
 
 	// from here on we use fresnel instead of spec as it is fixed3 = color
 	fresnel *= spec;
-	
-	
+
+
 
 	// Final Composition
 	vec4 c;
 	// we only use fresnel here / and apply late dotNL
 	c.rgb = (s.Albedo.rgb * _LightColor0.rgb + _LightColor0.rgb * fresnel) * dotNL * (atten * 2.0f);
-		
+
 	c.a = s.Alpha + _LightColor0.a * atten * (fresnel.r + fresnel.g + fresnel.b);
 	return c;
 }
@@ -189,12 +210,12 @@ float saturate(float a)
 vec4 toLinearPow(vec4 col)
 {
 	vec4 ncol;
-	
+
 	ncol.r = pow(col.r,Gamma);
 	ncol.g = pow(col.g,Gamma);
 	ncol.b = pow(col.b,Gamma);
 	ncol.a = pow(col.a,Gamma);
-	
+
 	return ncol;
 }
 
@@ -206,22 +227,22 @@ vec4 toLinearTrue(vec4 col)
 	{ncol.r = col.r / 12.92;}
 	else
 	{ncol.r = pow((col.r + 0.055) / 1.055, 2.4);}
-	
+
 	if (col.g <= 0.04045)
 	{ncol.g = col.g / 12.92;}
 	else
 	{ncol.g = pow((col.g + 0.055) / 1.055, 2.4);}
-	
+
 	if (col.b <= 0.04045)
 	{ncol.b = col.b / 12.92;}
 	else
 	{ncol.b = pow((col.b + 0.055) / 1.055, 2.4);}
-	
+
 	if (col.a <= 0.04045)
 	{ncol.a = col.a / 12.92;}
 	else
 	{ncol.a = pow((col.a + 0.055) / 1.055, 2.4);}
-	
+
 	return ncol;
 }
 
@@ -229,18 +250,18 @@ vec4 toLinearFast(vec4 col)
 {
 	//http://chilliant.blogspot.de/2012/08/srgb-approximations-for-hlsl.html
 	vec4 ncol;
-	
+
 	ncol.r = col.r * (col.r * (col.r * 0.305306011 + 0.682171111) + 0.012522878);
 	ncol.g = col.g * (col.g * (col.g * 0.305306011 + 0.682171111) + 0.012522878);
 	ncol.b = col.b * (col.b * (col.b * 0.305306011 + 0.682171111) + 0.012522878);
 	ncol.a = col.a * (col.a * (col.a * 0.305306011 + 0.682171111) + 0.012522878);
-	
+
 	return ncol;
 }
 
 vec4 toLinear(vec4 col)
 {
-	
+
 	if (Gamma_True)
 	{
 		return toLinearTrue(col);
@@ -262,59 +283,57 @@ vec4 toLinear(vec4 col)
 vec4 toGammaPow(vec4 col)
 {
 	vec4 ncol;
-	
+
 	ncol.r = pow(col.r,1/Gamma);
 	ncol.g = pow(col.g,1/Gamma);
 	ncol.b = pow(col.b,1/Gamma);
 	ncol.a = pow(col.a,1/Gamma);
-	
+
 	return ncol;
 }
 
 vec4 toGammaTrue(vec4 col)
 {
 	vec4 ncol;
-	
+
 	if (col.r <= 0.0031308)
 	{ncol.r = col.r * 12.92;}
 	else
 	{ncol.r = 1.055 * pow(col.r, 1.0 / 2.4) - 0.055;}
-	
+
 	if (col.g <= 0.0031308)
 	{ncol.g = col.g * 12.92;}
 	else
 	{ncol.g = 1.055 * pow(col.g, 1.0 / 2.4) - 0.055;}
-	
+
 	if (col.b <= 0.0031308)
 	{ncol.b = col.b * 12.92;}
 	else
 	{ncol.b = 1.055 * pow(col.b, 1.0 / 2.4) - 0.055;}
-	
+
 	if (col.a <= 0.0031308)
 	{ncol.a = col.a * 12.92;}
 	else
 	{ncol.a = 1.055 * pow(col.a, 1.0 / 2.4) - 0.055;}
-	
+
 	return ncol;
 }
 
 vec4 toGammaFast(vec4 col)
 {
 	//http://chilliant.blogspot.de/2012/08/srgb-approximations-for-hlsl.html
-	
+
 	vec4 ncol;
-	
+
 	vec3 S1 = sqrt(col.rgb);
  	vec3 S2 = sqrt(S1);
 	vec3 S3 = sqrt(S2);
 	ncol.rgb = 0.662002687 * S1 + 0.684122060 * S2 - 0.323583601 * S3 - 0.225411470 * col.rgb;
-	
+
 	ncol.a=1.0f; // nasty hack: calc brings in false alpha.
-	
+
 	return ncol;
 }
-
-
 
 vec4 toGamma(vec4 col)
 {
@@ -410,6 +429,11 @@ vec4 samplePanoramicLOD(sampler2D map, vec3 dir, float lod)
 }
 // ---
 
+vec3 lerp(vec3 a, vec3 b, float t)
+{
+    return clamp(a * (1.0f - t) + b * t, 0.0f, 1.0f);
+}
+
 void main()
 {
 	vec3 cameraPosWS = viewInverseMatrix[3].xyz;
@@ -429,27 +453,27 @@ void main()
 
 	// ------------------------------------------
 	// Add Normal from normalMap
-	vec3 fixedNormalOS = iFS_Normal;  // HACK for empty normal textures
+	vec3 fixedNormalOS = iFS_Normal;
 	vec3 normalTS = texture2D(normalMap,uv).xyz;
 
-	
+
 	if (length(normalTS)<0.0001f)
 	{
 		cumulatedNormalOS = normalOS;
+		normalTS = vec3(0.5f,0.5f,1.0f); //fix for empty normal texture.
 	}
-	else
-	{
-		normalTS = fixNormalSample(normalTS);
-	    normalTS *= heightMapScale;
-		vec3 normalMapOS = normalTS.x*tangentOS + normalTS.y*binormalOS;
-		cumulatedNormalOS = cumulatedNormalOS + normalMapOS;
-		cumulatedNormalOS = normalize(cumulatedNormalOS);
-		
-		fixedNormalOS = normalize(
-						normalTS.x*iFS_Tangent +
-						normalTS.y*iFS_Binormal +
-						normalTS.z*iFS_Normal );
-	}
+
+
+    normalTS = fixNormalSample(normalTS);
+    normalTS *= heightMapScale;
+    vec3 normalMapOS = normalTS.x*tangentOS + normalTS.y*binormalOS;
+    cumulatedNormalOS = cumulatedNormalOS + normalMapOS;
+    cumulatedNormalOS = normalize(cumulatedNormalOS);
+
+    fixedNormalOS = normalize(
+                    normalTS.x*iFS_Tangent +
+                    normalTS.y*iFS_Binormal +
+                    normalTS.z*iFS_Normal );
 
 	vec3 fixedNormalWS = fixedNormalOS;
   	vec3 cumulatedNormalWS = normalVecOSToWS(cumulatedNormalOS);
@@ -458,17 +482,15 @@ void main()
   	// Compute Diffuse & Specular
 
 	SurfaceOutputLux o;
-	
-  	//float glossiness = texture2D(glossinessMap,uv).r * glossMult;
-  
+
 	vec4 diff_albedo = texture2D(diffuseMap, uv);
 	vec4 spec_albedo = texture2D(specularMap, uv);
-	
+
 	if (SKY_INVERTROUGH)
 	{
 		spec_albedo.a = 1 - spec_albedo.a;
 	}
-	
+
 	if (LUX_LINEAR)
 	{
 		vec4 ldiff = toLinear(diff_albedo);
@@ -476,16 +498,34 @@ void main()
 		spec_albedo.rgb = lspec.rgb;
 		diff_albedo.rgb = ldiff.rgb;
 	}
-	
-	// Diffuse Albedo
-	o.Albedo = diff_albedo.rgb;// * _Color.rgb;
-	o.Alpha = diff_albedo.a;// * _Color.a;
-	o.Normal = cumulatedNormalWS; //UnpackNormal(tex2D(_BumpMap, uv));
-	// Specular Color
-	o.SpecularColor = spec_albedo.rgb;
-	// Roughness – we just take it as it is and do not bring it into linear space (alpha!) so roughness textures must be authored using gamma values
-	o.Specular = spec_albedo.a;
-	
+
+    if (Metalness)
+    {
+        // Metal (R) AO (G) Spec (B) Roughness (A)
+
+        // Diffuse Albedo
+        // We have to "darken" diffuse albedo by metalness as it controls ambient diffuse lighting
+        o.Albedo = diff_albedo.rgb * (1.0 - spec_albedo.r);
+        o.Alpha = diff_albedo.a;
+        o.Normal = cumulatedNormalWS;
+        // Specular Color
+        // Lerp between specular color (defined as shades of gray for dielectric parts in the blue channel )
+		// and the diffuse albedo color based on "Metalness"
+        o.SpecularColor = lerp(spec_albedo.bbb, diff_albedo.rgb, spec_albedo.r);
+        // Roughness – we just take it as it is and do not bring it into linear space (alpha!) so roughness textures must be authored using gamma values
+        o.Specular = LuxAdjustSpecular(spec_albedo.a);
+    }
+    else
+    {
+        // Diffuse Albedo
+        o.Albedo = diff_albedo.rgb;
+        o.Alpha = diff_albedo.a;
+        o.Normal = cumulatedNormalWS;
+        // Specular Color
+        o.SpecularColor = spec_albedo.rgb;
+        // Roughness – we just take it as it is and do not bring it into linear space (alpha!) so roughness textures must be authored using gamma values
+        o.Specular = LuxAdjustSpecular(spec_albedo.a);
+    }
 
 	// Light 0 contribution
 	vec4 contrib1 = vec4(0.0f,0.0f,0.0f,0.0f);
@@ -500,20 +540,20 @@ void main()
 	// Lux IBL / ambient lighting
 	float Lux_HDR_Scale = HDR_Scale;
 	vec4 ExposureIBL;
-	
-	
+
+
 	if (LUX_LINEAR)
 	{// LINEAR
 		// exposure is already in linear space
 		// Lux_HDR_Scale is in srgb so we convert it to linear space
-		
-		ExposureIBL.x = DiffuseExposure;
+
+		ExposureIBL.x = DiffuseExposure * AmbiIntensity;
 		if (DiffHDR)
 		{
 			ExposureIBL.x *= pow(Lux_HDR_Scale,2.2333333f);
 		}
-		
-		ExposureIBL.y = SpecularExposure;
+
+		ExposureIBL.y = SpecularExposure * AmbiIntensity;
 		if (SpecHDR)
 		{
 			ExposureIBL.y *= pow(Lux_HDR_Scale,2.2333333f);
@@ -523,13 +563,13 @@ void main()
 	{// GAMMA
 		// exposure is in linear space so we convert it to srgb
 		// Lux_HDR_Scale is already in srgb
-		
-		ExposureIBL.x = pow(DiffuseExposure, 1.0f / 2.2333333f);
+
+		ExposureIBL.x = pow(DiffuseExposure * AmbiIntensity, 1.0f / 2.2333333f);
 		if (DiffHDR) {
 			ExposureIBL.x *= Lux_HDR_Scale;
 		}
-		
-		ExposureIBL.y = pow(SpecularExposure, 1.0f / 2.2333333f);
+
+		ExposureIBL.y = pow(SpecularExposure * AmbiIntensity, 1.0f / 2.2333333f);
 		if (SpecHDR) {
 			ExposureIBL.y *= Lux_HDR_Scale;
 		}
@@ -537,19 +577,29 @@ void main()
 
 	vec4 diff_ibl = vec4(0,0,0,0);
 	vec4 spec_ibl = vec4(0,0,0,0);
-	
+
 	// --- Using IBL calculations from physically_based/fs.glsl shader.
 	vec3 Tp = normalize(iFS_Tangent
 		- fixedNormalWS*dot(iFS_Tangent, fixedNormalWS)); // local tangent
 	vec3 Bp = normalize(iFS_Binormal
 		- fixedNormalWS*dot(iFS_Binormal,fixedNormalWS)
 		- Tp*dot(iFS_Binormal, Tp)); // local bitangent
-	
+
 	float ndv = max( 1e-8, abs(dot( pointToCameraDirWS, fixedNormalWS )) );
 
 	vec3 contribE = vec3(0.0,0.0,0.0);
-	float glossiness = 1.0f - spec_albedo.a;
-	
+	float glossiness;
+	if (Metalness)
+    {
+         glossiness = 1.0f - o.Specular;
+    }
+	else
+    {
+        glossiness = 1.0f - o.Specular;
+    }
+
+    //glossiness = pow(glossiness , 1.0f + 8.0f * spec_albedo.b );
+
 	for(int i=0; i<nbSamples; ++i)
 	{
 		vec2 Xi = hammersley[i];
@@ -557,7 +607,7 @@ void main()
 		float pdfD = probabilityLambert(Sd, fixedNormalWS);
 		float lodD = computeLOD(Sd, pdfD);
 		diff_ibl += samplePanoramicLOD(environmentMap,rotate(Sd,envRotation),lodD);
-		
+
 		vec3 Hn = importanceSampleGGX(Xi,Tp,Bp,fixedNormalWS, glossiness);
 		vec3 Ln = -reflect(pointToCameraDirWS,Hn);
 
@@ -587,9 +637,7 @@ void main()
 	diff_ibl /= nbSamples;
 	spec_ibl /= nbSamples;
 	// ---
-	
-	//diff_ibl = diff_ibl.bgra;
-	
+
 	//		add diffuse IBL
 	if (LUX_LINEAR){
 			// if colorspace = linear alpha has to be brought to linear too (rgb already is): alpha = pow(alpha,2.233333333).
@@ -600,52 +648,75 @@ void main()
 	o.Emission = diff_ibl.rgb * ExposureIBL.x * o.Albedo;
 
 	//		add specular IBL
-	//spec_ibl = spec_ibl.bgra;
-
 	if (LUX_LINEAR){
 		// if colorspace = linear alpha has to be brought to linear too (rgb already is): alpha = pow(alpha,2.233333333f).
 		// approximation taken from http://chilliant.blogspot.de/2012/08/srgb-approximations-for-hlsl.html
 		spec_ibl.a *= spec_ibl.a * (spec_ibl.a * 0.305306011f + 0.682171111f) + 0.012522878f;
 	}
-	
-	//spec_ibl.rgb = spec_ibl.rgb * spec_ibl.a;
-	
+
 	// fresnel based on spec_albedo.rgb and roughness (spec_albedo.a)
 	// taken from: http://seblagarde.wordpress.com/2011/08/17/hello-world/
 	// viewDir is in tangent-space (as we sample o.Normal) so we use o.Normal
-	vec3 FresnelSchlickWithRoughness = spec_albedo.rgb + ( max(spec_albedo.aaa,spec_albedo.rgb) - spec_albedo.rgb) * exp2(-OneOnLN2_x6 * saturate(dot(normalize(pointToCameraDirWS), o.Normal)));		
-	spec_ibl.rgb *= FresnelSchlickWithRoughness * ExposureIBL.y;
-	
+	vec3 FresnelSchlickWithRoughness = o.SpecularColor.rgb +
+                    ( max(vec3(o.Specular,o.Specular,o.Specular),o.SpecularColor.rgb) - o.SpecularColor.rgb)
+                    * exp2(-OneOnLN2_x6 * saturate(dot(normalize(pointToCameraDirWS), o.Normal)));
+
+    //vec3 FresnelSchlickWithRoughness = spec_albedo.rgb +
+    //                ( max(spec_albedo.aaa,spec_albedo.rgb) - spec_albedo.rgb)
+    //                * exp2(-OneOnLN2_x6 * saturate(dot(normalize(pointToCameraDirWS), o.Normal)));
+
+
+	spec_ibl.rgb = clamp(spec_ibl.rgb * FresnelSchlickWithRoughness * ExposureIBL.y, 0.0f,1.0f);
+
 	// add diffuse and specular and conserve energy
-	o.Emission = (1.0f - spec_ibl.rgb) * o.Emission + spec_ibl.rgb;
-	
-	vec4 Ambient_final = vec4(o.Albedo.rgb * ambientColor.rgb,1.0f);
+	o.Emission = clamp((1.0f - spec_ibl.rgb) * o.Emission + spec_ibl.rgb, 0.0f, 1.0f);
+
+	vec4 Ambient_final = vec4(o.Albedo.rgb * ambientColor.rgb, 1.0f);
 	if (LUX_AO){
 		vec2 AO_uv = uv;
 		if (!LUX_AO_TILE)
 		{
 			AO_uv = iFS_UV;
 		}
-		vec4 ambientOcclusion = texture2D(ambientOcclusionMap, AO_uv);
-		o.Emission *= ambientOcclusion.a;
-		Ambient_final.a = ambientOcclusion.a;
+
+        {
+            vec4 ambientOcclusion = texture2D(ambientOcclusionMap, AO_uv);
+            /*if (LUX_LINEAR)
+            {
+                 ambientOcclusion = toLinear(ambientOcclusion);
+            }*/
+            o.Emission *= ambientOcclusion.a;
+            Ambient_final.a *= ambientOcclusion.a;
+        }
+
+        if (Metalness)
+        {
+            vec4 ambientOcclusion = spec_albedo; //texture2D(specularMap, uv);
+            if (LUX_LINEAR)
+            {
+                 //ambientOcclusion = toLinear(ambientOcclusion);
+            }
+            o.Emission *= ambientOcclusion.g;
+            Ambient_final.a *= ambientOcclusion.g;
+        }
 	}
-   
-   
+
+
    	vec4 emis_albedo = texture2D(emissiveMap, uv);
 	o.Emission += emis_albedo.rgb * emis_albedo.a;
-   
+
   	// ------------------------------------------
-  	vec3 finalcolor = contrib1.rgb * contrib1.a + contrib2.rgb * contrib2.a + (o.Emission + Ambient_final.rgb * Ambient_final.a);
+  	vec3 finalcolor = clamp(contrib1.rgb * contrib1.a + contrib2.rgb * contrib2.a + (o.Emission + Ambient_final.rgb * Ambient_final.a),
+                           0.0f, 1.0f);
 
  	// Final Color
  	if (LUX_LINEAR)
  	{
-  		gl_FragColor = toGamma(vec4(finalcolor,1.0f));
+  		gl_FragColor = toGamma(vec4(finalcolor,o.Alpha));
   	}
   	else
   	{
-  		gl_FragColor = vec4(finalcolor,1.0f);
+  		gl_FragColor = vec4(finalcolor,o.Alpha);
   	}
 }
 
